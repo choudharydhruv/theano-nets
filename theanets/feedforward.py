@@ -28,6 +28,8 @@ import gzip
 import numpy as np
 import theano
 import theano.tensor as TT
+from theano.tensor.signal import downsample
+from theano.tensor.nnet import conv
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
@@ -102,6 +104,11 @@ class Network(object):
 
         self.rng = kwargs.get('rng') or RandomStreams()
         self.tied_weights = bool(kwargs.get('tied_weights'))
+        self.cnn = bool(kwargs.get('cnn'))
+        self.input2d = bool(kwargs.get('input2d'))
+        self.featuremaps = np.asarray(kwargs.get('feature-maps'))
+        self.input_dim = np.asarray(kwargs.get('input-dim'))
+        self.filter_shp = np.asarray(kwargs.get('filter'))
 
         # x is a proxy for our network's input, and y for its output.
         self.x = TT.matrix('x')
@@ -121,6 +128,9 @@ class Network(object):
             assert np.allclose(encode - decode[::-1], 0), error
             sizes = layers[:k+1]
 
+        if(self.cnn):
+        _, parameter_count = self._create_convolution_forward_map(activation, **kwargs)
+        else
         _, parameter_count = self._create_forward_map(sizes, activation, **kwargs)
 
         # set up the "decoding" computations from layer activations to output.
@@ -239,6 +249,8 @@ class Network(object):
             self.x,
             kwargs.get('input_noise', 0.),
             kwargs.get('input_dropouts', 0.))
+
+
         for i, (a, b) in enumerate(zip(sizes[:-1], sizes[1:])):
             Wi, bi, count = self._create_layer(a, b, i)
             parameter_count += count
@@ -250,6 +262,85 @@ class Network(object):
             self.biases.append(bi)
             z = self.hiddens[-1]
         return z, parameter_count
+
+    def _create_convolution_forward_map(layers, activation, **kwargs):
+        '''Set up a computation graph to map the input to layer activations.
+
+        Parameters
+        ----------
+        layers : list of int
+            A list of the number of nodes in each feedforward hidden layer after the convolution layers.
+
+        activation : callable
+            The activation function to use on each feedforward hidden layer.
+
+        Returns
+        -------
+        parameter_count : int
+            The number of parameters created in the forward map.
+        '''
+
+        batch_size = kwargs.get('batch_size', 32)
+        ps = kwargs.get('maxpool', 2)
+
+        parameter_count = 0
+        z = self._add_noise(
+            self.x,
+            kwargs.get('input_noise', 0.),
+            kwargs.get('input_dropouts', 0.))
+   
+        sizes = self.layers[:-1]
+
+        '''
+        If input is 2D e.g. images convlayers is the sequence of feature map sizes.
+        Each size is a 4D tensor batch_size, input_feature_map, height, width
+
+        '''
+
+        height = self.input_dim[0]
+        width = self.input_dim[1]
+        fmaps = self.featuremaps[:-1]
+        input_fmap = fmaps[0]       
+        flt_shape = self.filter_shp.reshape(len(self.filter_shp)/2, 2)
+
+        layer_input = z.reshape(batch_size, input_fmap, height, width)
+
+        # Construct the convolutional pooling layers:
+        # filtering reduces the image size to (xdim-f1+1,ydim-f2+1)
+        # maxpooling reduces this further to (dim1/ps,dim2/ps) = (12,12)
+        # 4D output tensor is thus of shape (20,20,12,12)
+        for i, (a, (f1, f2)) in enumerate(zip(fmaps[1:-1], flt_shp)):
+            layer[i] = ConvPoolLayer(self.rng, input=layer_input, image_shape=(batch_size, input_fmap, height, width), filter_shape=(a, input_fmap, f1, f2, i), poolsize=(ps, ps), activation) 
+            layer_input = layer[i].output
+            input_fmap = a
+            height = (height - f1 + 1)/ps
+            width = (width - f2 + 1)/ps
+            self.hiddens.append(self._add_noise(layer[i].output)
+            self.weights.append(layer[i].W)
+            self.biases.append(layer[i].b)
+            parameter_count += layer[i].param_count
+
+        # the HiddenLayer being fully-connected, it operates on 2D matrices of
+        # shape (batch_size,num_inputs) (i.e matrix of rasterized images).
+        # This will generate a matrix of shape (batchsize, num_inputs) 
+        hlayer_input = layer[np.size(fmaps)-2].output.flatten(2) 
+
+        #The input dimension to the hidden nueron layer is num_inputs or num pixels 
+        #which is the 2nd dimension of hlayer_input
+        sizes = [np.size(hlayer_input, 1)] + self.layers[:-1]
+ 
+        for i, (a, b) in enumerate(zip(sizes[:-1], sizes[1:])):
+            Wi, bi, count = self._create_layer(a, b, i)
+            parameter_count += count
+            self.hiddens.append(self._add_noise(
+                activation(TT.dot(hlayer_input, Wi) + bi),
+                kwargs.get('hidden_noise', 0.),
+                kwargs.get('hidden_dropouts', 0.)))
+            self.weights.append(Wi)
+            self.biases.append(bi)
+            hlayer_input = self.hiddens[-1]
+        return hlayer_input, parameter_count
+
 
     def _add_noise(self, x, sigma, rho):
         '''Add noise and dropouts to elements of x as needed.
@@ -455,6 +546,62 @@ class Network(object):
                 TT.sqr(TT.grad(h.mean(axis=0).sum(), self.x)).sum() for h in self.hiddens)
         return cost
 
+class ConvPoolLayer(object):
+    def __init__(self, rng, input, filter_shape, img_shape, pool=(2,2), activation, suffix):
+        """
+        :type rng: numpy.random.RandomState
+        :param rng: a random number generator used to initialize weights
+
+        :type input: theano.tensor.dtensor4 or theano.tensor.dtensor5
+        :param input: symbolic image tensor, of shape img_shape
+
+        :type filter_shape: tuple or list of length 4
+        :param filter_shape: (number of filters(output feature maps), num input feature maps,
+                              filter height,filter width)
+
+        :type image_shape: tuple or list of length 4
+        :param image_shape: (batch size, num input feature maps,
+                             image height, image width)
+
+        :type pool: tuple or list of length 2
+        :param pool: the downsampling (pooling) factor (#rows,#cols)
+
+        :type activation: callable activation function
+        :param activation: type of activation TanH|Sigmoid...
+        """
+        assert image_shape[1] == filter_shape[1]
+        self.input = input
+
+        # initialize weight values: the fan-in of each hidden neuron is
+        # restricted by the size of the receptive fields.
+        fan_in =  np.prod(filter_shape[1:])
+        W_values = np.asarray(rng.uniform(
+              low=-np.sqrt(3./fan_in),
+              high=np.sqrt(3./fan_in),
+              size=filter_shape), dtype=FLOAT)
+        self.W = theano.shared(value=W_values, name='W_{}'.format(suffix))
+
+        # the bias is a 1D tensor -- one bias per output feature map
+        b_values = np.zeros((filter_shape[0],), dtype=FLOAT)
+        self.b = theano.shared(value=b_values, name='b_{}'.format(suffix))
+
+        # convolve input feature maps with filters
+        conv_out = conv.conv2d(input, self.W,
+                filter_shape=filter_shape, image_shape=image_shape)
+
+        # downsample each feature map individually, using maxpooling
+        pooled_out = downsample.max_pool_2d(conv_out, poolsize, ignore_border=True)
+
+        # add the bias term. Since the bias is a vector (1D array), we first
+        # reshape it to a tensor of shape (1, n_filters, 1, 1). Each bias will thus
+        # be broadcasted across mini-batches and feature map width & height
+        self.output = activation(pooled_out + self.b.dimshuffle('x', 0, 'x', 'x'))
+
+        # store parameters of this layer
+        self.params = [self.W, self.b]
+        self.param_count = filter_shape[0]+1)*filter_shape[2]*filter_shape[3]
+
+        logging.info('featuremaps for conv layer %s: %s x %s', suffix, image_shape[1], filter_shape[0])
 
 class Autoencoder(Network):
     '''An autoencoder attempts to reproduce its input.'''

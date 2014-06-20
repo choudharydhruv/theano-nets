@@ -102,3 +102,18 @@ g.add_argument('--preconditioner', action='store_true',
 g = climate.add_arg_group('Recurrent Nets')
 g.add_argument('--pool-error-start', type=int, default=3, metavar='T',
                help='compute network error starting at time T')
+
+
+g = climate.add_arg_group('Convolutional Nets')
+g.add_argument('--cnn', action='store_true',
+               help='if set, construct a conv nueral net')
+g.add_argument('--input2d', action='store_true',
+               help='if set, construct a conv nueral net with a 2d input map')
+g.add_argument('--input-dim', nargs='+', type=int, metavar='N',
+               help='input dimensions of the image N1 N2 ...')
+g.add_argument('-c', '--feature-maps', nargs='+', type=int, metavar='N',
+               help='construct a network with feature maps sizes N1, N2, ...')
+g.add_argument('-f', '--filter', nargs='+', type=int, metavar='N',
+               help='construct a network with convolution filter of size N1, N2, N3, N4 ...')
+g.add_argument('-P', '--maxpool', nargs='+', type=int, metavar='N',
+               help='construct a network with convolution filter of size N1, N2, ...')
