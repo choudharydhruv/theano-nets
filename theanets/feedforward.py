@@ -307,6 +307,8 @@ class Network(object):
         flt_arr = self.filter_shape.reshape(len(self.filter_shape)/2, 2)
 
         layer_input = z.reshape((batch_size, input_fmap, height, width))
+        print "Conv IShapes", layer_input.shape.eval()
+        j=0
 
         # Construct the convolutional pooling layers:
         # filtering reduces the image size to (xdim-f1+1,ydim-f2+1)
@@ -323,6 +325,7 @@ class Network(object):
             self.weights.append(clayer.W)
             self.biases.append(clayer.b)
             parameter_count += clayer.param_count
+	    j=i+1
         # the HiddenLayer being fully-connected, it operates on 2D matrices of
         # shape (batch_size,num_inputs) (i.e matrix of rasterized images).
         # This will generate a matrix of shape (batchsize, num_inputs) 
@@ -336,7 +339,7 @@ class Network(object):
         print zip(sizes[:-1], sizes[1:])
  
         for i, (a, b) in enumerate(zip(sizes[:-1], sizes[1:])):
-            Wi, bi, count = self._create_layer(a, b, i)
+            Wi, bi, count = self._create_layer(a, b, i+j)
             parameter_count += count
             self.hiddens.append(self._add_noise(
                 activation(TT.dot(hlayer_input, Wi) + bi),
