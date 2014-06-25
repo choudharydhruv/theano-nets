@@ -90,7 +90,16 @@ class Trainer(object):
             param.set_value(target)
 
     def evaluate(self, iteration, valid_set):
-        costs = np.mean([self.f_eval(*x) for x in valid_set], axis=0)
+        xm = []
+        cnt = 0
+        for x in valid_set:
+            #print np.asarray(x[0]).shape[0]
+            #print x[0]
+            if (np.asarray(x[0]).shape[0]==64):
+                xm.append(self.f_eval(*x))
+                cnt += 1
+        print "Mini batches in valid", cnt
+        costs = np.mean(xm, axis=0)
         improvement = self.best_cost - costs[0] > self.best_cost * self.min_improvement
         marker = ''
         if improvement:
@@ -191,17 +200,20 @@ class SGD(Trainer):
         '''
         # TODO: run this loop in parallel !
         for x in train_set:
-            moves = []
-            # first, move to the position in parameter space that we would get
-            # to using classical momentum-based sgd: p_t' = p_t + u. we also
-            # save the update u = m * v_t for each parameter.
-            for param, vel in zip(self.params, velocities):
-                u = self.momentum * vel
-                v = param.get_value(borrow=True)
-                v += u
-                param.set_value(v, borrow=True)
-                moves.append(u)
-            self.momentum = 1 - (1 - self.momentum_decay) * (1 - self.momentum)
+            cnt = 0
+            if (np.asarray(x[0]).shape[0]==64):
+                cnt += 1
+                moves = []
+                # first, move to the position in parameter space that we would get
+                # to using classical momentum-based sgd: p_t' = p_t + u. we also
+                # save the update u = m * v_t for each parameter.
+                for param, vel in zip(self.params, velocities):
+                    u = self.momentum * vel
+                    v = param.get_value(borrow=True)
+                    v += u
+                    param.set_value(v, borrow=True)
+                    moves.append(u)
+                self.momentum = 1 - (1 - self.momentum_decay) * (1 - self.momentum)
             # then update the parameter using the gradient information from the
             # new parameter position. define:
             #
@@ -219,11 +231,11 @@ class SGD(Trainer):
             #   p_t+1 = p_t + v_t+1
             #   p_t+1 = (p_t' - u) + (u + d)
             #   p_t+1 = p_t' + d
-            for p, v, g, u in zip(self.params, velocities, self.f_grad(*x), moves):
-                d = -self.learning_rate * self._rescale_gradient(g)
-                self._apply_delta(p, d)
-                v[:] = u + d
-            yield self.f_train(*x)
+                for p, v, g, u in zip(self.params, velocities, self.f_grad(*x), moves):
+                    d = -self.learning_rate * self._rescale_gradient(g)
+                    self._apply_delta(p, d)
+                    v[:] = u + d
+                yield self.f_train(*x)
 
     def _sgd(self, train_set, velocities):
         '''Make one run through the training set.
@@ -233,10 +245,16 @@ class SGD(Trainer):
         '''
         # TODO: run this loop in parallel !
         for x in train_set:
-            for p, g in zip(self.params, self.f_grad(*x)):
-                self._apply_delta(
-                    p, -self.learning_rate * self._rescale_gradient(g))
-            yield self.f_train(*x)
+            print np.asarray(x[0]).shape[0]
+            print x[0]
+            cnt = 0
+            if (np.asarray(x[0]).shape[0]==64):
+                cnt += 1
+                for p, g in zip(self.params, self.f_grad(*x)):
+                    self._apply_delta(
+                        p, -self.learning_rate * self._rescale_gradient(g))
+                yield self.f_train(*x)
+	    print "Mini batches in train: ", cnt 
 
     def _rescale_gradient(self, grad):
         '''Rescale a gradient if its length exceeds our limit.'''

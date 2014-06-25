@@ -22,6 +22,7 @@
 
 import climate
 import collections
+import numpy as np
 import numpy.random as rng
 
 logging = climate.get_logger(__name__)
@@ -85,8 +86,9 @@ class SequenceDataset(object):
             batch = self.batches[0]
             if not self.number_batches:
                 self.number_batches = cardinality
-
+        print np.asarray(batch[0]).shape
         logging.info('data %s: %s mini-batches of %s',
+            #self.label, cardinality, ', '.join( str(np.asarray(batch[0]).shape) + str(np.asarray(batch[1]).shape)))
             self.label, cardinality, ', '.join(str(x.shape) for x in batch))
 
     def __iter__(self):

@@ -22,6 +22,7 @@
 
 import climate
 import theano.tensor as TT
+import numpy as np
 
 from .dataset import SequenceDataset as Dataset
 from . import feedforward
@@ -163,6 +164,7 @@ class Experiment(object):
         if 'size' not in kwargs:
             kwargs['size'] = self.args.batch_size
         kwargs['label'] = label
+        print "Adding dataset", np.asarray(dataset).shape, " Of batch size", self.args.batch_size
         if not isinstance(dataset, (tuple, list)):
             dataset = (dataset, )
         self.datasets[label] = Dataset(*dataset, **kwargs)

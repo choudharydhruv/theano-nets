@@ -30,9 +30,10 @@ import theano
 import theano.tensor as TT
 from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
+import copy
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-
+from operator import add, sub, floordiv, mul
 logging = climate.get_logger(__name__)
 
 FLOAT = theano.config.floatX
@@ -97,10 +98,11 @@ class Network(object):
 
     def __init__(self, layers, activation, **kwargs):
         self.layers = tuple(layers)
-        self.activation = activation
         self.hiddens = []
         self.weights = []
         self.biases = []
+        self.filter_shapes = []
+        self.pool_sizes = []
 
         self.rng = kwargs.get('rng') or RandomStreams()
         self.tied_weights = bool(kwargs.get('tied_weights'))
@@ -111,7 +113,10 @@ class Network(object):
         self.filter_shape = np.asarray(kwargs.get('filter_size'))
 
         # x is a proxy for our network's input, and y for its output.
+        #self.x = TT.dtensor4('x')
         self.x = TT.matrix('x')
+        #self.x.tag.test_value = np.random.rand(64, 784)
+        
 
         activation = self._build_activation(activation)
         if hasattr(activation, '__theanets_name__'):
@@ -156,9 +161,6 @@ class Network(object):
             bias = theano.shared(np.zeros((n, ), FLOAT), name='bias_out')
             self.biases.append(bias)
             self.hiddens.append(sum(decoders) + bias)
-
-        for w in self.weights:
-            print w.get_value(borrow=True).shape
 
         logging.info('%d total network parameters', parameter_count)
 
@@ -218,6 +220,33 @@ class Network(object):
         bias = theano.shared(np.zeros((b, ), FLOAT), name='b_{}'.format(suffix))
         logging.info('weights for layer %s: %s x %s', suffix, a, b)
         return weight, bias, (a + 1) * b
+
+    def __find_shapes(self, img_shape, num_layers):
+        self.layer_shapes = []
+        next_shape = list(img_shape)
+        self.layer_shapes.append(list(img_shape))
+   
+        print "Num Conv layers", num_layers 
+        for i in range(0, num_layers):
+            filter_shape = list(self.filter_shapes[i])
+            print "Filter shape", filter_shape
+            print "next_shape", next_shape
+
+            # Convolution.
+            next_shape[2:] = map(sub, next_shape[2:], filter_shape[2:])
+            next_shape[2:] = map(add, next_shape[2:], [1, 1])
+            next_shape[1] = filter_shape[0]
+
+            # Max pooling.
+            next_shape[2:] = map(floordiv, next_shape[2:], self.pool_sizes[i])
+            print "New next shape", next_shape
+
+            # The fun copying stuff is so new changes to next_shape don't modify
+            # references already in the list.
+            self.layer_shapes.append([])
+            for num in next_shape:
+                cop = copy.deepcopy(num)
+                self.layer_shapes[-1].append(cop)
 
     def _create_forward_map(self, sizes, activation, **kwargs):
         '''Set up a computation graph to map the input to layer activations.
@@ -284,7 +313,7 @@ class Network(object):
             The number of parameters created in the forward map.
         '''
 
-        batch_size = kwargs.get('batch_size', 32)
+        batch_size = kwargs.get('batch_size', 16)
         ps = kwargs.get('maxpool', 2)
 
         parameter_count = 0
@@ -298,16 +327,57 @@ class Network(object):
         '''
         If input is 2D e.g. images convlayers is the sequence of feature map sizes.
         Each size is a 4D tensor batch_size, input_feature_map, height, width
-
         '''
+        #Dimensions of input image
         height = self.input_dim[0]
         width = self.input_dim[1]
-        fmaps = self.featuremaps
-        input_fmap = fmaps[0]       
-        flt_arr = self.filter_shape.reshape(len(self.filter_shape)/2, 2)
 
+        #Array of feature maps per layer
+        fmaps = self.featuremaps
+
+        #Number of input feature maps
+        input_fmap = fmaps[0]
+
+        #Populating self.filter_shapes       
+        flt_arr = self.filter_shape.reshape(len(self.filter_shape)/2, 2)
+        for i, (i1, i2, (i3, i4)) in enumerate(zip(fmaps[1:], fmaps[:-1], flt_arr)):
+            self.filter_shapes.append((i1,i2,i3,i4))
+            self.pool_sizes.append((ps, ps))
+
+        img_shape = (batch_size, input_fmap, height, width)
+        self.__find_shapes(img_shape, len(fmaps[1:]))
+
+        print self.layer_shapes
+        print "Type of x", type(self.x)   
+
+        for i, (i1, i2, (i3, i4)) in enumerate(zip(fmaps[1:], fmaps[:-1], flt_arr)):
+            self._add_conv_layer((i1, i2, i3, i4), self.layer_shapes[i])
+
+        layers = list(self.layers)
+        flat_size = reduce(mul, self.layer_shapes[-1], 1)
+        flat_size = np.prod(self.layer_shapes[-1][1:])
+        print flat_size
+        layers.insert(0, flat_size)
+        self._make_graph(img_shape, activation)
+        parameter_count = 0
+        z = self._add_noise(
+            self.conv_output,
+            kwargs.get('input_noise', 0.),
+            kwargs.get('input_dropouts', 0.))
+
+        for i, (a, b) in enumerate(zip(layers[:-1], layers[1:])):
+            Wi, bi, count = self._create_layer(a, b, i)
+            parameter_count += count
+            self.hiddens.append(self._add_noise(
+                activation(TT.dot(z, Wi) + bi),
+                kwargs.get('hidden_noise', 0.),
+                kwargs.get('hidden_dropouts', 0.)))
+            self.weights.append(Wi)
+            self.biases.append(bi)
+            z = self.hiddens[-1]
+        return z, parameter_count
+        '''
         layer_input = z.reshape((batch_size, input_fmap, height, width))
-        print "Conv IShapes", layer_input.shape.eval()
         j=0
 
         # Construct the convolutional pooling layers:
@@ -330,14 +400,11 @@ class Network(object):
         # shape (batch_size,num_inputs) (i.e matrix of rasterized images).
         # This will generate a matrix of shape (batchsize, num_inputs) 
         hlayer_input = layer_input.flatten(2) 
-        print self.layers
 
         #The input dimension to the hidden nueron layer is num_inputs or num pixels 
         #which is the 2nd dimension of hlayer_input
         sizes = self.layers[:-1] 
 
-        print zip(sizes[:-1], sizes[1:])
- 
         for i, (a, b) in enumerate(zip(sizes[:-1], sizes[1:])):
             Wi, bi, count = self._create_layer(a, b, i+j)
             parameter_count += count
@@ -349,7 +416,53 @@ class Network(object):
             self.biases.append(bi)
             hlayer_input = self.hiddens[-1]
         return hlayer_input, parameter_count
+        '''
 
+
+    def _add_conv_layer(self, filter_shape, img_shape):
+    
+        print filter_shape
+        print img_shape
+        if filter_shape[1] != img_shape[1]:
+            raise RuntimeError("Input feature maps must be the same.")
+
+        rng = np.random.RandomState()
+        fan_in = np.prod(filter_shape[1:])
+        weight_values = np.asarray(self.rng.uniform(
+            low = -np.sqrt(3. / fan_in),
+            high = np.sqrt(3. / fan_in),
+            size = filter_shape), dtype = theano.config.floatX)
+        weights = theano.shared(value = weight_values, name = "weights")
+        self.weights.append(weights)
+
+        bias_values = np.zeros((filter_shape[0],), dtype = theano.config.floatX)
+        biases = theano.shared(value = bias_values, name = "biases")
+        self.biases.append(biases)
+
+    def _make_graph(self, img_shape, activation):
+        #self._inputs = TT.dtensor4("inputs")
+        layer_outputs = self.x.reshape(img_shape)
+        for i in range(0, len(self.weights)):
+            # Perform the convolution.
+            conv_out = conv.conv2d(layer_outputs, self.weights[i],
+              filter_shape = self.filter_shapes[i],
+              image_shape = self.layer_shapes[i])
+      
+            # Downsample the feature maps.
+            pooled_out = downsample.max_pool_2d(conv_out, self.pool_sizes[i],
+              ignore_border = True)
+
+            # Account for the bias. Since it is a vector, we first need to reshape it
+            # to (1, n_filters, 1, 1).
+            layer_outputs = activation(pooled_out + self.biases[i].dimshuffle("x", 0, "x", "x"))
+            self.hiddens.append(layer_outputs)
+
+        # Concatenate output maps into one big matrix where each row is the
+        # concatenation of all the feature maps from one item in the batch.
+        next_shape = self.layer_shapes[i + 1]
+        new_shape = (next_shape[0], reduce(mul, next_shape[1:], 1))
+        print "New shape for MLP", new_shape
+        self.conv_output = layer_outputs.reshape(new_shape)
 
     def _add_noise(self, x, sigma, rho):
         '''Add noise and dropouts to elements of x as needed.
@@ -461,6 +574,8 @@ class Network(object):
             Returns the activation values of each layer in the the network when
             given input `x`.
         '''
+        print "Shape of batch", x.shape()
+
         self._compile()
         return self._compute(x)
 
@@ -553,7 +668,6 @@ class Network(object):
         if contractive_l2 > 0:
             cost += contractive_l2 * sum(
                 TT.sqr(TT.grad(h.mean(axis=0).sum(), self.x)).sum() for h in self.hiddens)
-        print cost;
         return cost
 
 class ConvPoolLayer(object):
@@ -681,6 +795,7 @@ class Regressor(Network):
 
     def __init__(self, *args, **kwargs):
         self.k = TT.matrix('k')
+        #self.k.tag.test_value = np.random.rand(64)
         super(Regressor, self).__init__(*args, **kwargs)
 
     @property
