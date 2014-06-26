@@ -38,6 +38,8 @@ logging = climate.get_logger(__name__)
 
 FLOAT = theano.config.floatX
 
+import warnings
+warnings.filterwarnings("ignore")
 
 class Network(object):
     '''The network class encapsulates a fully-connected feedforward net.
@@ -111,11 +113,12 @@ class Network(object):
         self.featuremaps = np.asarray(kwargs.get('feature_maps'))
         self.input_dim = np.asarray(kwargs.get('input_dim'))
         self.filter_shape = np.asarray(kwargs.get('filter_size'))
+        self.pool_size = np.asarray(kwargs.get('max_pool'))
 
         # x is a proxy for our network's input, and y for its output.
         #self.x = TT.dtensor4('x')
         self.x = TT.matrix('x')
-        #self.x.tag.test_value = np.random.rand(64, 784)
+        self.x.tag.test_value = np.random.rand(64, 53550)
         
 
         activation = self._build_activation(activation)
@@ -229,8 +232,9 @@ class Network(object):
         print "Num Conv layers", num_layers 
         for i in range(0, num_layers):
             filter_shape = list(self.filter_shapes[i])
-            print "Filter shape", filter_shape
-            print "next_shape", next_shape
+            print "Filter shape: ", filter_shape
+            print "Input Shape: ", next_shape
+            print "Pooling dimensions: ", self.pool_sizes[i]
 
             # Convolution.
             next_shape[2:] = map(sub, next_shape[2:], filter_shape[2:])
@@ -239,7 +243,7 @@ class Network(object):
 
             # Max pooling.
             next_shape[2:] = map(floordiv, next_shape[2:], self.pool_sizes[i])
-            print "New next shape", next_shape
+            print "Output Shape: ", next_shape
 
             # The fun copying stuff is so new changes to next_shape don't modify
             # references already in the list.
@@ -340,9 +344,11 @@ class Network(object):
 
         #Populating self.filter_shapes       
         flt_arr = self.filter_shape.reshape(len(self.filter_shape)/2, 2)
+        pool_arr = self.pool_size.reshape(len(self.pool_size)/2, 2)
         for i, (i1, i2, (i3, i4)) in enumerate(zip(fmaps[1:], fmaps[:-1], flt_arr)):
             self.filter_shapes.append((i1,i2,i3,i4))
-            self.pool_sizes.append((ps, ps))
+        for i, (i1, i2) in enumerate(pool_arr):
+            self.pool_sizes.append((i1, i2))
 
         img_shape = (batch_size, input_fmap, height, width)
         self.__find_shapes(img_shape, len(fmaps[1:]))
@@ -795,7 +801,7 @@ class Regressor(Network):
 
     def __init__(self, *args, **kwargs):
         self.k = TT.matrix('k')
-        #self.k.tag.test_value = np.random.rand(64)
+        self.k.tag.test_value = np.random.rand(64)
         super(Regressor, self).__init__(*args, **kwargs)
 
     @property

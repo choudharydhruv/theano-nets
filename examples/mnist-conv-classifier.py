@@ -23,7 +23,8 @@ e = theanets.Experiment(
     rng = rng, 
     input_dim=(28,28),
     feature_maps=(1,20,50),
-    filter_size=(5,5,5,5), 
+    filter_size=(5,5,5,5),
+    max_pool=(2,2,2,2), 
     layers=(500, 10),
     train_batches=100,
 )

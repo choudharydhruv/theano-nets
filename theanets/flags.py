@@ -115,5 +115,5 @@ g.add_argument('-c', '--feature-maps', nargs='+', type=int, metavar='N',
                help='construct a network with feature maps sizes N1, N2, ...')
 g.add_argument('-f', '--filter-size', nargs='+', type=int, metavar='N',
                help='construct a network with convolution filter of size N1, N2, N3, N4 ...')
-g.add_argument('-P', '--maxpool', type=int, default=2, metavar='N',
-               help='construct a maxpooling layer of size N')
+g.add_argument('-f', '--max-pool', nargs='+', type=int, metavar='N',
+               help='construct a maxpooling layer of size N1, N2, N3, N4 ...')
