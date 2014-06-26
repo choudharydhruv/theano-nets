@@ -353,7 +353,7 @@ class Network(object):
         for i, (i1, i2, (i3, i4)) in enumerate(zip(fmaps[1:], fmaps[:-1], flt_arr)):
             self._add_conv_layer((i1, i2, i3, i4), self.layer_shapes[i])
 
-        layers = list(self.layers)
+        layers = list(self.layers[:-1])
         flat_size = reduce(mul, self.layer_shapes[-1], 1)
         flat_size = np.prod(self.layer_shapes[-1][1:])
         print flat_size

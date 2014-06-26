@@ -64,6 +64,7 @@ class Trainer(object):
         self.min_improvement = kwargs.get('min_improvement', 0.)
         self.iterations = kwargs.get('num_updates', 1000)
         self.patience = kwargs.get('patience', 100)
+        self.batch_size = kwargs.get('batch_size', 32)
 
         self.shapes = [p.get_value(borrow=True).shape for p in self.params]
         self.counts = [np.prod(s) for s in self.shapes]
@@ -95,7 +96,7 @@ class Trainer(object):
         for x in valid_set:
             #print np.asarray(x[0]).shape[0]
             #print x[0]
-            if (np.asarray(x[0]).shape[0]==64):
+            if (np.asarray(x[0]).shape[0]==self.batch_size):
                 xm.append(self.f_eval(*x))
                 cnt += 1
         print "Mini batches in valid", cnt
@@ -201,7 +202,7 @@ class SGD(Trainer):
         # TODO: run this loop in parallel !
         for x in train_set:
             cnt = 0
-            if (np.asarray(x[0]).shape[0]==64):
+            if (np.asarray(x[0]).shape[0]==self.batch_size):
                 cnt += 1
                 moves = []
                 # first, move to the position in parameter space that we would get
@@ -248,7 +249,7 @@ class SGD(Trainer):
             print np.asarray(x[0]).shape[0]
             print x[0]
             cnt = 0
-            if (np.asarray(x[0]).shape[0]==64):
+            if (np.asarray(x[0]).shape[0]==self.batch_size):
                 cnt += 1
                 for p, g in zip(self.params, self.f_grad(*x)):
                     self._apply_delta(
