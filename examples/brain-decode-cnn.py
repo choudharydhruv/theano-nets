@@ -304,7 +304,7 @@ if __name__ == '__main__':
         rng = rng, 
         input_dim=(306,f_shape),
         feature_maps=(1,10),
-        filter_size=(1,175),
+        filter_size=(1,f_shape),
         max_pool=(1,1), 
         layers=(1000,500,2),
         train_batches=100,

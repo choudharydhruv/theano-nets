@@ -143,7 +143,7 @@ class Network(object):
 
         # set up the "decoding" computations from layer activations to output.
         w = len(self.weights)
-        print self.weights
+        #print self.weights
         if self.tied_weights:
             for i in range(w - 1, -1, -1):
                 h = self.hiddens[-1]
@@ -229,12 +229,13 @@ class Network(object):
         next_shape = list(img_shape)
         self.layer_shapes.append(list(img_shape))
    
-        print "Num Conv layers", num_layers 
+        print "Number of Convolution layers: ", num_layers 
         for i in range(0, num_layers):
             filter_shape = list(self.filter_shapes[i])
-            print "Filter shape: ", filter_shape
-            print "Input Shape: ", next_shape
-            print "Pooling dimensions: ", self.pool_sizes[i]
+            print "Layer ", i
+            print "    Filter shape: ", filter_shape
+            print "    Input Shape: ", next_shape
+            print "    Pooling dimensions: ", self.pool_sizes[i]
 
             # Convolution.
             next_shape[2:] = map(sub, next_shape[2:], filter_shape[2:])
@@ -243,7 +244,7 @@ class Network(object):
 
             # Max pooling.
             next_shape[2:] = map(floordiv, next_shape[2:], self.pool_sizes[i])
-            print "Output Shape: ", next_shape
+            print "    Output Shape: ", next_shape
 
             # The fun copying stuff is so new changes to next_shape don't modify
             # references already in the list.
@@ -353,8 +354,8 @@ class Network(object):
         img_shape = (batch_size, input_fmap, height, width)
         self.__find_shapes(img_shape, len(fmaps[1:]))
 
-        print self.layer_shapes
-        print "Type of x", type(self.x)   
+        print "Shapes of all convolution layers", self.layer_shapes
+        #print "Type of x", type(self.x)   
 
         for i, (i1, i2, (i3, i4)) in enumerate(zip(fmaps[1:], fmaps[:-1], flt_arr)):
             self._add_conv_layer((i1, i2, i3, i4), self.layer_shapes[i])
@@ -362,7 +363,7 @@ class Network(object):
         layers = list(self.layers[:-1])
         flat_size = reduce(mul, self.layer_shapes[-1], 1)
         flat_size = np.prod(self.layer_shapes[-1][1:])
-        print flat_size
+        #print flat_size
         layers.insert(0, flat_size)
         self._make_graph(img_shape, activation)
         parameter_count = 0
@@ -427,8 +428,8 @@ class Network(object):
 
     def _add_conv_layer(self, filter_shape, img_shape):
     
-        print filter_shape
-        print img_shape
+        #print filter_shape
+        #print img_shape
         if filter_shape[1] != img_shape[1]:
             raise RuntimeError("Input feature maps must be the same.")
 
@@ -467,7 +468,7 @@ class Network(object):
         # concatenation of all the feature maps from one item in the batch.
         next_shape = self.layer_shapes[i + 1]
         new_shape = (next_shape[0], reduce(mul, next_shape[1:], 1))
-        print "New shape for MLP", new_shape
+        print "Hidden unit shape for the fully connected part: ", new_shape
         self.conv_output = layer_outputs.reshape(new_shape)
 
     def _add_noise(self, x, sigma, rho):
@@ -580,7 +581,7 @@ class Network(object):
             Returns the activation values of each layer in the the network when
             given input `x`.
         '''
-        print "Shape of batch", x.shape()
+        #print "Shape of batch", x.shape()
 
         self._compile()
         return self._compute(x)
