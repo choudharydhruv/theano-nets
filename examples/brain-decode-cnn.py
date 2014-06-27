@@ -181,43 +181,9 @@ def create_features(XX, tmin, tmax, sfreq, tmin_original=-0.5):
 
 
 if __name__ == '__main__':
-
-
-    print "Parsing arguments"
-    plotfile = ''
-    algo = ''
-    reg = 1
-    mode = 0
-    fe=-1
-    print sys.argv[1:]
+    
     resfile = ''  
  
-    try:
-      opts, args = getopt.getopt(sys.argv[1:],"hm:a:p:r:c:f:",["mode","algo=","pfile=","reg=","fe="])
-    except getopt.GetoptError:
-      print 'dhruv.py -o <plotfile>'
-      sys.exit(2)
-    for opt, arg in opts:
-      if opt == '-h':
-         print 'dhruv.py -o <plotfile> -m  mode(seconds of input) -C <regularization> -a <algorithm(l1|l2|lsvm|ksvm) -f <feature extraction 0=None 1=l1 based 2=chi2>'
-         sys.exit()
-      elif opt in ("-m", "--mode"):
-         mode = float(arg)
-      elif opt in ("-a", "--algo"):
-         algo = arg
-      elif opt in ("-p", "--pfile"):
-         plotfile = arg
-      elif opt in ("-r", "--rfile"):
-         resfile = arg
-      elif opt in ("-c", "--reg"):
-         reg = float(arg)
-      elif opt in ("-f", "--fe"):
-         fe = int(arg)
-    print 'Algorithm is ', algo
-    print 'Plot file is ', plotfile
-    print 'Regularization Parameter is ', reg
-    
-
     print "DecMeg2014: https://www.kaggle.com/c/decoding-the-human-brain"
     print
     #subjects_train = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16] # use range(1, 17) for all subjects
@@ -228,7 +194,7 @@ if __name__ == '__main__':
     # We throw away all the MEG data outside the first 0.5sec from when
     # the visual stimulus start:
     tmin = 0
-    tmax = mode
+    tmax = 0.7
     print "Restricting MEG data to the interval [%s, %s]sec." % (tmin, tmax)
 
     X_train = []
