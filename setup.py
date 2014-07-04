@@ -5,12 +5,10 @@ setuptools.setup(
     name='theanets',
     version='0.2.0',
     packages=setuptools.find_packages(),
-    author='Leif Johnson',
-    author_email='leif@leifjohnson.net',
     description='A library of neural nets in theano',
     long_description=open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'README.rst')).read(),
     license='MIT',
-    url='http://github.com/lmjohns3/theano-nets/',
+    url='https://github.com/choudharydhruv/theano-nets',
     keywords=('machine-learning '
               'neural-network '
               'theano '
