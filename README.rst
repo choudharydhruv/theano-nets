@@ -1,6 +1,8 @@
 theanets
 ========
 
+This is an extension of the original theanets implementation at http://github.com/lmjohns3/theano-nets. We extend it to include convolutional nueral nets.
+
 This package contains implementations of several common neural network
 structures, using the amazing Theano_ package for optimization.
 
@@ -15,7 +17,7 @@ Install the latest published code using pip::
 
 Or download the current source and run it from there::
 
-    git clone http://github.com/lmjohns3/theano-nets
+    git clone https://github.com/choudharydhruv/theano-nets
     cd theano-nets
     python setup.py develop
 
