@@ -366,12 +366,12 @@ class Network(object):
         flat_size = np.prod(self.layer_shapes[-1][1:])
         #print flat_size
         layers.insert(0, flat_size)
-        self._make_graph(img_shape, activation)
+        self._make_graph(img_shape, activation, **kwargs)
         parameter_count = 0
         z = self._add_noise(
             self.conv_output,
-            kwargs.get('input_noise', 0.),
-            kwargs.get('input_dropouts', 0.))
+            kwargs.get('hidden_noise', 0.),
+            kwargs.get('hidden_dropouts', 0.))
 
         for i, (a, b) in enumerate(zip(layers[:-1], layers[1:])):
             Wi, bi, count = self._create_layer(a, b, i)
@@ -434,9 +434,9 @@ class Network(object):
         if filter_shape[1] != img_shape[1]:
             raise RuntimeError("Input feature maps must be the same.")
 
-        rng = np.random.RandomState()
+        rng = np.random.RandomState(23455)
         fan_in = np.prod(filter_shape[1:])
-        weight_values = np.asarray(self.rng.uniform(
+        weight_values = np.asarray(rng.uniform(
             low = -np.sqrt(3. / fan_in),
             high = np.sqrt(3. / fan_in),
             size = filter_shape), dtype = theano.config.floatX)
@@ -447,7 +447,7 @@ class Network(object):
         biases = theano.shared(value = bias_values, name = "biases")
         self.biases.append(biases)
 
-    def _make_graph(self, img_shape, activation):
+    def _make_graph(self, img_shape, activation, **kwargs):
         #self._inputs = TT.dtensor4("inputs")
         layer_outputs = self.x.reshape(img_shape)
         for i in range(0, len(self.weights)):
@@ -463,7 +463,10 @@ class Network(object):
             # Account for the bias. Since it is a vector, we first need to reshape it
             # to (1, n_filters, 1, 1).
             layer_outputs = activation(pooled_out + self.biases[i].dimshuffle("x", 0, "x", "x"))
-            self.hiddens.append(layer_outputs)
+            self.hiddens.append(self._add_noise(
+                layer_outputs,
+                kwargs.get('hidden_noise', 0.),
+                kwargs.get('hidden_dropouts', 0.)))
 
         # Concatenate output maps into one big matrix where each row is the
         # concatenation of all the feature maps from one item in the batch.
@@ -494,12 +497,12 @@ class Network(object):
         '''
         if sigma > 0 and rho > 0:
             noise = self.rng.normal(size=x.shape, std=sigma)
-            mask = self.rng.binomial(size=x.shape, n=1, p=1-rho, dtype=FLOAT)
+            mask = self.rng.binomial(size=x.shape, n=1, p=1-rho, dtype=theano.config.floatX)
             return mask * (x + noise)
         if sigma > 0:
             return x + self.rng.normal(size=x.shape, std=sigma)
         if rho > 0:
-            mask = self.rng.binomial(size=x.shape, n=1, p=1-rho, dtype=FLOAT)
+            mask = self.rng.binomial(size=x.shape, n=1, p=1-rho, dtype=theano.config.floatX)
             return mask * x
         return x
 
@@ -614,7 +617,7 @@ class Network(object):
         for i in range(0, len(x_new[:,0]), size):
 	    pred = self.feed_forward(x_new[i:i + size])[-1]
 	    #print pred[:,0]
-	    y_pred.append(pred[:,0])
+	    y_pred.append(pred[:,1])
 	#print y_pred
         y_pred = np.hstack(y_pred)
 	overshoot = (-1)*overshoot

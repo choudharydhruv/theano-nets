@@ -260,13 +260,13 @@ if __name__ == '__main__':
     f_shape = int(n_features/306)
 
     print "Training."
-    rng = np.random.RandomState(23455)
+    #rng = np.random.RandomState(23455)
 
     e = theanets.Experiment(
         theanets.Classifier,
         cnn = 1,
         input2d = 1,
-        rng = rng, 
+        #rng = rng, 
         input_dim=(306,f_shape),
         feature_maps=(1,10),
         filter_size=(1,f_shape),
