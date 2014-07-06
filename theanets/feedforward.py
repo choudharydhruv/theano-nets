@@ -114,11 +114,12 @@ class Network(object):
         self.input_dim = np.asarray(kwargs.get('input_dim'))
         self.filter_shape = np.asarray(kwargs.get('filter_size'))
         self.pool_size = np.asarray(kwargs.get('max_pool'))
+	self.batch_size = int(kwargs.get('batch_size', 64))
 
         # x is a proxy for our network's input, and y for its output.
         #self.x = TT.dtensor4('x')
         self.x = TT.matrix('x')
-        self.x.tag.test_value = np.random.rand(64, 53550)
+        #self.x.tag.test_value = np.random.rand(64, 53550)
         
 
         activation = self._build_activation(activation)
@@ -318,7 +319,7 @@ class Network(object):
             The number of parameters created in the forward map.
         '''
 
-        batch_size = kwargs.get('batch_size', 16)
+        batch_size = self.batch_size
         ps = kwargs.get('maxpool', 2)
 
         parameter_count = 0
@@ -599,8 +600,30 @@ class Network(object):
         ndarray
             Returns the values of the network output units when given input `x`.
         '''
-        return self.feed_forward(x)[-1]
-
+        y_pred = []
+	x_new = [x]
+        size = self.batch_size
+        overshoot = size - (len(x[:,0])%size)
+	#print "Overshoot is ", overshoot 
+        if overshoot != 0:
+	    x_new.append(x[0:overshoot])
+	x_new = np.vstack(x_new)
+	#print x_new.shape
+	assert len(x_new[:,0])%size is 0
+ 
+        for i in range(0, len(x_new[:,0]), size):
+	    pred = self.feed_forward(x_new[i:i + size])[-1]
+	    #print pred[:,0]
+	    y_pred.append(pred[:,0])
+	#print y_pred
+        y_pred = np.hstack(y_pred)
+	overshoot = (-1)*overshoot
+	#print "Padded shape", y_pred.shape 
+	y_pred = y_pred[:overshoot]
+	print "Final returned shape of prediction", y_pred.shape 
+        return y_pred
+        #return self.feed_forward(x)[-1]
+   
     __call__ = predict
 
     def save(self, filename):
@@ -802,7 +825,7 @@ class Regressor(Network):
 
     def __init__(self, *args, **kwargs):
         self.k = TT.matrix('k')
-        self.k.tag.test_value = np.random.rand(64)
+        self.k.tag.test_value = np.random.rand(self.batch_size)
         super(Regressor, self).__init__(*args, **kwargs)
 
     @property

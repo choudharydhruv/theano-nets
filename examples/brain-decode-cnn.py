@@ -207,7 +207,7 @@ if __name__ == '__main__':
     print
     #print "Creating the trainset."
     for subject in subjects_train:
-        filename = '/home/dhruv/work/kaggle/DecMeg2014/dec-meg-2014/data/train_subject%02d.mat' % subject
+        filename = 'data/train_subject%02d.mat' % subject
         print "Loading", filename
         data = loadmat(filename, squeeze_me=True)
         XX = data['X']
@@ -231,7 +231,7 @@ if __name__ == '__main__':
         y_train.append(yy)
 
     for subject in subjects_val:
-        filename = '/home/dhruv/work/kaggle/DecMeg2014/dec-meg-2014/data/train_subject%02d.mat' % subject
+        filename = 'data/train_subject%02d.mat' % subject
         print "Loading val", filename
         data = loadmat(filename, squeeze_me=True)
         XX = data['X']
@@ -245,7 +245,6 @@ if __name__ == '__main__':
 
         X_val.append(XX)
         y_val.append(yy)
-
 
     X_train = np.vstack(X_train)
     y_train = np.concatenate(y_train)
@@ -282,6 +281,7 @@ if __name__ == '__main__':
     
     pl.show()
 
+    #resfile = "submission.csv"
     if(resfile != ''):
         print "Creating the testset."
         subjects_test = range(17, 24)
@@ -307,9 +307,8 @@ if __name__ == '__main__':
         print "Testset:", X_test.shape
                       
         print "Predicting."
-        y_pred = clf.predict(X_test)
+        y_pred = e.network.predict(X_test)
 
-        filename_submission = "submission.csv"
         print "Creating submission file", resfile
         f = open(resfile, "w")
         print >> f, "Id,Prediction"
